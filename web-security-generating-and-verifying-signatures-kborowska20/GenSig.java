@@ -1,52 +1,45 @@
-package controller;
+import java.io.*;
+import java.security.*;
 
-import dao.EventCategoryDaoSQLite;
-import dao.EventDao;
-import dao.EventDaoSQLite;
-import model.Event;
-import model.EventCategory;
-import spark.ModelAndView;
-import spark.Request;
-import spark.Response;
+class GenSig {
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+    public static void main(String[] args) {
 
-
-public class EventController {
-
-    public ModelAndView renderEvents(String choice, int id, Request req, Response res) {
-        EventDaoSQLite eventDaoSQLite = new EventDaoSQLite();
-        EventCategoryDaoSQLite eventCategoryDaoSQLite = new EventCategoryDaoSQLite();
-        Map params = new HashMap<>();
-        if(choice.equals("")){
-            params.put("events", eventDaoSQLite.getAll());
-        } else if(choice.equals("EventCategory")) {
-            params.put("events", eventDaoSQLite.getBy(id));
+        if (args.length != 1) {
+            System.out.println("Usage: GenSig nameOfFileToSign");
         }
-        params.put("eventCategory", eventCategoryDaoSQLite.getAll());
-        return new ModelAndView(params, "event/index");
-    }
-    public void removeEvents(int id){
-        EventDaoSQLite eventDaoSQLite = new EventDaoSQLite();
-        eventDaoSQLite.remove(id);
-    }
-    public void addEvents(Event event){
-        EventDaoSQLite eventDaoSQLite = new EventDaoSQLite();
-        eventDaoSQLite.add(event);
-    }
+        else try{
+            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("DSA", "SUN");
+            SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+            keyGen.initialize(1024, random);
+            KeyPair pair = keyGen.generateKeyPair();
+            PrivateKey priv = pair.getPrivate();
+            PublicKey pub = pair.getPublic();
+            Signature dsa = Signature.getInstance("SHA1withDSA", "SUN");
+            dsa.initSign(priv);
+            FileInputStream fis = new FileInputStream(args[0]);
+            BufferedInputStream bufin = new BufferedInputStream(fis);
+            byte[] buffer = new byte[1024];
+            int len;
+            while (bufin.available() != 0) {
+                len = bufin.read(buffer);
+                dsa.update(buffer, 0, len);
+            };
+            bufin.close();
+            byte[] realSig = dsa.sign();
+            FileOutputStream sigfos = new FileOutputStream("sig");
+            sigfos.write(realSig);
+            sigfos.close();
+            byte[] key = pub.getEncoded();
+            FileOutputStream keyfos = new FileOutputStream("suepk");
+            keyfos.write(key);
 
-    public void editEvents(int id, String name, Integer eventCategoryId, Date date, String description){
-        EventDaoSQLite eventDaoSQLite = new EventDaoSQLite();
-        Event event = eventDaoSQLite.find(id);
-        EventCategoryDaoSQLite eventCategoryDaoSQLite = new EventCategoryDaoSQLite();
-        int categoryId = event.getEventCategory().getId();
-        EventCategory eventCategory = eventCategoryDaoSQLite.find(categoryId);
-        event.setName(name);
-        event.setDate(date);
-        event.setEventCategory(eventCategory);
-        event.setDescription(description);
-        eventDaoSQLite.editEvent(event);
-    }
+            keyfos.close();
+
+        } catch (Exception e) {
+            System.err.println("Caught exception " + e.toString());
+        }
+
+    };
+
 }
